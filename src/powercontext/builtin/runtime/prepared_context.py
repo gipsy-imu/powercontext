@@ -34,6 +34,7 @@ from powercontext.builtin.runtime.prepared_code import (
     PreparedCodeCandidate,
     assemble_code,
 )
+from powercontext.builtin.runtime.prepared_evidence import PreparedContextFragment, select_memory_evidence
 from powercontext.builtin.runtime.prepared_text import (
     TRUST_POLICY,
     ContextTextItem,
@@ -106,6 +107,7 @@ class PreparedContextBuild:
     origins: tuple[PreparedContextOrigin, ...]
     omissions: PreparedContextOmissions = PreparedContextOmissions()
     code_origins: tuple[CodeEvidenceRef, ...] = ()
+    fragments: tuple[PreparedContextFragment, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -211,6 +213,8 @@ class PreparedContextBuilder:
         profile_candidates: Sequence[PreparedProfileCandidate] = (),
         code_candidates: Sequence[PreparedCodeCandidate] = (),
     ) -> PreparedContextBuild:
+        if request.evidence_selection:
+            return self._select_evidence(request, current_scope_id, memory_candidates)
         if request.include_code:
 
             def historical(history_request: PrepareContextRequest, entries: int) -> PreparedContextBuild:
@@ -274,9 +278,18 @@ class PreparedContextBuilder:
 
         Pure and side-effect free: no I/O, no persistence, nothing reported to any sink, and
         the same inputs as :meth:`build_scopes_result` are guaranteed to yield the same
-        counters because both go through :meth:`_select_entries`.
+        counters because it uses the same selection path as the build, including evidence mode.
         """
 
+        if request.evidence_selection:
+            result = self._select_evidence(request, current_scope_id, memory_candidates)
+            return RecallBudgetView(
+                max_bytes=request.max_bytes,
+                delivered_items=len(result.origins),
+                truncated_items=result.omissions.truncated_items,
+                dropped_items=result.omissions.dropped_items,
+                unused_bytes=request.max_bytes - result.context.content_bytes,
+            )
         content, origins, omissions = self._select_entries(
             request=request,
             current_scope_id=current_scope_id,
@@ -292,6 +305,47 @@ class PreparedContextBuilder:
             truncated_items=omissions.truncated_items,
             dropped_items=omissions.dropped_items,
             unused_bytes=max(0, request.max_bytes - content_bytes),
+        )
+
+    def _select_evidence(
+        self,
+        request: PrepareContextRequest,
+        current_scope_id: str | None,
+        memory_candidates: Sequence[PreparedMemoryCandidates],
+    ) -> PreparedContextBuild:
+        if sum(len(group.hits) for group in memory_candidates) > self.memory_candidate_limit:
+            raise PreparedContextInvariantError("memory-candidate-limit")
+        documents: list[PreparedContextFragment] = []
+        for group in memory_candidates:
+            scope_id = group.scope_id or current_scope_id
+            if group.hits and not scope_id:
+                raise PreparedContextInvariantError("memory-scope-missing")
+            for entry in self._memory_entries(group.memory_ref, group.hits, scope_id=scope_id):
+                if not isinstance(entry.origin, MemoryEntryAddress):
+                    raise PreparedContextInvariantError("memory-scope-missing")
+                if all(document.address != entry.origin for document in documents):
+                    documents.append(PreparedContextFragment(entry.origin, 0, len(entry.content), entry.content))
+        fragments, content, dropped = select_memory_evidence(request.query, documents, request.max_bytes)
+        omissions = PreparedContextOmissions(
+            truncated_items=sum(
+                fragment.start != 0 or fragment.end != len(document.text)
+                for document in documents
+                for fragment in fragments
+                if fragment.address == document.address
+            ),
+            dropped_items=dropped,
+            dropped_no_fitting_truncation=dropped,
+        )
+        context = (
+            self.empty()
+            if content is None
+            else PreparedContext(status="ready", content=content, content_bytes=len(content.encode("utf-8")))
+        )
+        return PreparedContextBuild(
+            context=context,
+            origins=tuple(fragment.address for fragment in fragments),
+            omissions=omissions,
+            fragments=fragments,
         )
 
     def _select_entries(
