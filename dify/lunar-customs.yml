@@ -1,0 +1,299 @@
+app:
+  name: 月球海关
+  description: 查验来自月球的奇怪货物，按规定选择放行、隔离或退运。相同班次编号会恢复进度。
+  icon: 🌕
+  icon_background: '#E6E8FF'
+  mode: workflow
+  use_icon_as_answer_icon: false
+dependencies: []
+kind: app
+version: 0.6.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      enabled: false
+    opening_statement: ''
+    suggested_questions: []
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+  graph:
+    edges:
+    - id: 1001-source-1002-target
+      source: '1001'
+      sourceHandle: source
+      target: '1002'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        sourceType: start
+        targetType: if-else
+        isInIteration: false
+        isInLoop: false
+    - id: 1002-true-1003-target
+      source: '1002'
+      sourceHandle: 'true'
+      target: '1003'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        sourceType: if-else
+        targetType: http-request
+        isInIteration: false
+        isInLoop: false
+    - id: 1002-false-1004-target
+      source: '1002'
+      sourceHandle: 'false'
+      target: '1004'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        sourceType: if-else
+        targetType: http-request
+        isInIteration: false
+        isInLoop: false
+    - id: 1003-source-1005-target
+      source: '1003'
+      sourceHandle: source
+      target: '1005'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        sourceType: http-request
+        targetType: end
+        isInIteration: false
+        isInLoop: false
+    - id: 1004-source-1006-target
+      source: '1004'
+      sourceHandle: source
+      target: '1006'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+      data:
+        sourceType: http-request
+        targetType: end
+        isInIteration: false
+        isInLoop: false
+    nodes:
+    - id: '1001'
+      type: custom
+      data:
+        type: start
+        title: 值班台
+        desc: ''
+        selected: false
+        variables:
+        - variable: game_id
+          label: 班次编号（例如 demo-01）
+          type: text-input
+          required: true
+          max_length: 32
+          options: []
+        - variable: action
+          label: 操作
+          type: select
+          required: true
+          max_length: 32
+          options:
+          - 查看线索
+          - 提交裁决
+        - variable: case_number
+          label: 案号（裁决时填写）
+          type: text-input
+          required: false
+          max_length: 4
+          options: []
+        - variable: verdict
+          label: 裁决（裁决时选择）
+          type: select
+          required: false
+          max_length: 32
+          options:
+          - 放行
+          - 隔离
+          - 退运
+      height: 162
+      width: 244
+      position:
+        x: 30
+        y: 220
+      positionAbsolute:
+        x: 30
+        y: 220
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+    - id: '1002'
+      type: custom
+      data:
+        type: if-else
+        title: 查看线索还是提交裁决
+        desc: ''
+        selected: false
+        cases:
+        - case_id: 'true'
+          id: 'true'
+          logical_operator: and
+          conditions:
+          - id: is-inspect
+            comparison_operator: is
+            value: 查看线索
+            varType: string
+            variable_selector:
+            - '1001'
+            - action
+      height: 126
+      width: 244
+      position:
+        x: 340
+        y: 220
+      positionAbsolute:
+        x: 340
+        y: 220
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+    - id: '1003'
+      type: custom
+      data:
+        type: http-request
+        title: 向 seekdb 查验货物
+        desc: ''
+        selected: false
+        method: post
+        url: http://lunar-customs:8080/inspect
+        authorization:
+          type: no-auth
+        headers: ''
+        params: ''
+        body:
+          type: x-www-form-urlencoded
+          data:
+          - id: inspect-game_id
+            key: game_id
+            type: text
+            value: '{{#1001.game_id#}}'
+        timeout:
+          connect: 10
+          read: 20
+          write: 10
+      height: 84
+      width: 244
+      position:
+        x: 650
+        y: 145
+      positionAbsolute:
+        x: 650
+        y: 145
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+    - id: '1004'
+      type: custom
+      data:
+        type: http-request
+        title: 提交并保存裁决
+        desc: ''
+        selected: false
+        method: post
+        url: http://lunar-customs:8080/judge
+        authorization:
+          type: no-auth
+        headers: ''
+        params: ''
+        body:
+          type: x-www-form-urlencoded
+          data:
+          - id: judge-game_id
+            key: game_id
+            type: text
+            value: '{{#1001.game_id#}}'
+          - id: judge-case_number
+            key: case_number
+            type: text
+            value: '{{#1001.case_number#}}'
+          - id: judge-verdict
+            key: verdict
+            type: text
+            value: '{{#1001.verdict#}}'
+        timeout:
+          connect: 10
+          read: 20
+          write: 10
+      height: 84
+      width: 244
+      position:
+        x: 650
+        y: 345
+      positionAbsolute:
+        x: 650
+        y: 345
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+    - id: '1005'
+      type: custom
+      data:
+        type: end
+        title: 出示查验报告
+        desc: ''
+        selected: false
+        outputs:
+        - value_selector:
+          - '1003'
+          - body
+          value_type: string
+          variable: report
+      height: 84
+      width: 244
+      position:
+        x: 970
+        y: 145
+      positionAbsolute:
+        x: 970
+        y: 145
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+    - id: '1006'
+      type: custom
+      data:
+        type: end
+        title: 出示裁决报告
+        desc: ''
+        selected: false
+        outputs:
+        - value_selector:
+          - '1004'
+          - body
+          value_type: string
+          variable: report
+      height: 84
+      width: 244
+      position:
+        x: 970
+        y: 345
+      positionAbsolute:
+        x: 970
+        y: 345
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+    viewport:
+      x: 0
+      y: 0
+      zoom: 0.75
