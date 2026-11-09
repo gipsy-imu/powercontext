@@ -1,0 +1,286 @@
+{
+  "model": "Xenova/all-MiniLM-L6-v2",
+  "revision": "751bff37182d3f1213fa05d7196b954e230abad9",
+  "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+  "logicalCpus": 8,
+  "corpusDocuments": 12,
+  "queries": 8,
+  "artifactBytes": {
+    "q8": 23685047,
+    "fp16": 46010502,
+    "fp32": 91100283
+  },
+  "models": {
+    "compact": {
+      "backend": "webgpu",
+      "dtype": "fp16",
+      "loadMs": 279.2000000476837,
+      "inferenceMs": 85.80000019073486,
+      "batchSize": 8,
+      "count": 12,
+      "inserted": 12,
+      "writeMs": 40.08641699998407,
+      "refreshMs": 422.50700000001234,
+      "warmSingleMs": {
+        "samples": [
+          98.6,
+          87.3,
+          80.4
+        ],
+        "median": 87.3
+      },
+      "warmBatch8Ms": {
+        "samples": [
+          35.2,
+          34.3,
+          35.2
+        ],
+        "median": 35.2
+      },
+      "quality": {
+        "vector": {
+          "recallAt3": 1,
+          "mrrAt3": 1,
+          "ranks": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          "searchMs": {
+            "samples": [
+              1.66,
+              0.68,
+              0.59,
+              0.58,
+              0.64,
+              0.54,
+              0.57,
+              0.56
+            ],
+            "median": 0.59
+          },
+          "queryEmbeddingMs": {
+            "samples": [
+              6.5,
+              6.8,
+              7.4,
+              5.7,
+              5.3,
+              6,
+              5.8,
+              6.1
+            ],
+            "median": 6.05
+          },
+          "endToEndMs": {
+            "samples": [
+              12.8,
+              11.9,
+              11.3,
+              9.5,
+              9.6,
+              10.5,
+              9.6,
+              10.1
+            ],
+            "median": 10.3
+          }
+        },
+        "hybrid": {
+          "recallAt3": 1,
+          "mrrAt3": 0.9375,
+          "ranks": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            2,
+            1
+          ],
+          "searchMs": {
+            "samples": [
+              9.41,
+              1.51,
+              1.64,
+              2.24,
+              1.63,
+              1.69,
+              1.54,
+              1.63
+            ],
+            "median": 1.64
+          },
+          "queryEmbeddingMs": {
+            "samples": [
+              5.9,
+              5.6,
+              5.8,
+              5,
+              4.6,
+              7.1,
+              5.8,
+              7.2
+            ],
+            "median": 5.8
+          },
+          "endToEndMs": {
+            "samples": [
+              19.3,
+              11.2,
+              12.1,
+              12.1,
+              11.9,
+              14.6,
+              10.9,
+              12.4
+            ],
+            "median": 12.1
+          }
+        }
+      }
+    },
+    "fp32": {
+      "backend": "webgpu",
+      "dtype": "fp32",
+      "loadMs": 280,
+      "inferenceMs": 81.09999990463257,
+      "batchSize": 8,
+      "count": 12,
+      "inserted": 12,
+      "writeMs": 34.46195799999987,
+      "refreshMs": 414.1160830000008,
+      "warmSingleMs": {
+        "samples": [
+          127.2,
+          92,
+          95.1
+        ],
+        "median": 95.1
+      },
+      "warmBatch8Ms": {
+        "samples": [
+          54.6,
+          50.7,
+          49.2
+        ],
+        "median": 50.7
+      },
+      "quality": {
+        "vector": {
+          "recallAt3": 1,
+          "mrrAt3": 1,
+          "ranks": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          "searchMs": {
+            "samples": [
+              1.62,
+              0.86,
+              0.78,
+              0.69,
+              1.08,
+              0.67,
+              0.62,
+              0.91
+            ],
+            "median": 0.82
+          },
+          "queryEmbeddingMs": {
+            "samples": [
+              7.1,
+              6.5,
+              5.3,
+              5.6,
+              6.1,
+              7.2,
+              6.7,
+              7
+            ],
+            "median": 6.6
+          },
+          "endToEndMs": {
+            "samples": [
+              12.5,
+              11.8,
+              11,
+              10.1,
+              10.8,
+              12.1,
+              11,
+              11.9
+            ],
+            "median": 11.4
+          }
+        },
+        "hybrid": {
+          "recallAt3": 1,
+          "mrrAt3": 0.9375,
+          "ranks": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            2,
+            1
+          ],
+          "searchMs": {
+            "samples": [
+              4.64,
+              1.64,
+              1.58,
+              1.68,
+              1.76,
+              1.58,
+              1.51,
+              1.76
+            ],
+            "median": 1.66
+          },
+          "queryEmbeddingMs": {
+            "samples": [
+              6,
+              6,
+              5.3,
+              6.1,
+              5.1,
+              7,
+              6.3,
+              7.2
+            ],
+            "median": 6.05
+          },
+          "endToEndMs": {
+            "samples": [
+              15.6,
+              12.2,
+              10.7,
+              13.5,
+              10.8,
+              12,
+              11.2,
+              12.3
+            ],
+            "median": 12.1
+          }
+        }
+      }
+    }
+  },
+  "compressionRatio": 1.9799888947092992
+}

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>实验知识库 · 本地向量检索</title>
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="eyebrow">浏览器端推理 / seekdb</span>
+        <h1>实验知识库</h1>
+        <p>导入实验笔记，在浏览器生成向量，再从 seekdb 找回原文与出处。</p>
+        <span id="backend" class="badge">推理后端尚未初始化</span>
+      </header>
+
+      <section aria-labelledby="library-heading">
+        <h2 id="library-heading">1. 选择知识库</h2>
+        <label for="library">知识库名称</label>
+        <input id="library" list="libraries" value="lab-notes" maxlength="30" spellcheck="false">
+        <datalist id="libraries"></datalist>
+        <p class="hint">输入新名称即可创建知识库，或从列表切换。库名使用小写字母、数字和短横线。</p>
+      </section>
+
+      <section aria-labelledby="import-heading">
+        <h2 id="import-heading">2. 导入笔记</h2>
+        <form id="import-form">
+          <label for="files">选择 UTF-8 文本或 Markdown 文件（最多 24 个）</label>
+          <input id="files" type="file" multiple accept=".txt,.md,text/plain,text/markdown">
+          <div class="actions">
+            <button type="submit">向量化并写入</button>
+            <button type="button" class="secondary" id="demo">导入示例笔记</button>
+          </div>
+        </form>
+        <p id="import-status" role="status"></p>
+      </section>
+
+      <section aria-labelledby="search-heading">
+        <h2 id="search-heading">3. 查找原文</h2>
+        <form id="search-form">
+          <label for="query">查询内容</label>
+          <input id="query" maxlength="500" required placeholder="例如 sensor calibration">
+          <label for="mode">检索方式</label>
+          <select id="mode">
+            <option value="hybrid">全文与向量混合</option>
+            <option value="vector">向量检索</option>
+          </select>
+          <div class="actions"><button type="submit">搜索</button></div>
+        </form>
+        <p id="search-status" role="status"></p>
+        <ol id="results"></ol>
+      </section>
+
+      <details>
+        <summary>复现模型与检索对比实验</summary>
+        <p>在独立集合对比 FP32 和当前后端的量化模型，分别测量单条推理与批处理。首次对比会加载两个模型版本。</p>
+        <div class="actions">
+          <button id="benchmark" type="button">运行对比</button>
+          <button id="export" type="button" class="secondary" disabled>下载报告</button>
+        </div>
+        <p id="benchmark-status" role="status"></p>
+        <pre id="report" hidden></pre>
+      </details>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
