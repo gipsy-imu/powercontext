@@ -1,2 +1,0 @@
-pylibseekdb==1.4.0.post2
-PyMySQL==1.2.3
