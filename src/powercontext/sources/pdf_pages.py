@@ -132,9 +132,18 @@ PDF_PAGE_SOURCE_DEFINITION: SourceDefinition[PDFPageInput, _PDFPageSource, PDFPa
 
 _WORD = re.compile(r"[^\W\d_]+|\d+")
 _SECTION_NUMBER = re.compile(r"^item \d+[a-z]?\s*[.:]\s*", re.IGNORECASE)
+_CONTENTS_LINK = re.compile(r"(?:\.\s*){3,}\d+\s*$")
+_TABLE_VALUE = re.compile(r"\s(?:[$€£]\s*)?\(?-?\d[\d,.]*(?:%|\))?(?=\s|$)")
 _REGION = (
-    "north america", "latin america", "south america", "europe", "middle east", "africa", "asia",
-    "pacific", "oceania",
+    "north america",
+    "latin america",
+    "south america",
+    "europe",
+    "middle east",
+    "africa",
+    "asia",
+    "pacific",
+    "oceania",
 )
 _YEAR = re.compile(r"(?:19|20)\d{2}\Z")
 _BOILERPLATE = frozenset(
@@ -147,8 +156,12 @@ _BOILERPLATE = frozenset(
 # Financial terminology varies across reports and between report headings and prose.
 _CONCEPTS = (
     (
-        "income statement", "statement of income", "statements of operations", "profit and loss",
-        "earnings statement", "p&l statement",
+        "income statement",
+        "statement of income",
+        "statements of operations",
+        "profit and loss",
+        "earnings statement",
+        "p&l statement",
     ),
     ("balance sheet", "statement of financial position"),
     ("cash flow", "statement of cash flows", "cash provided by operating activities"),
@@ -158,8 +171,14 @@ _CONCEPTS = (
     ("depreciation and amortization", "depreciation amortization", "depreciation", "d&a"),
     ("litigation", "legal proceedings", "legal matters", "legal battles", "contingencies"),
     (
-        "geographies", "geographic", "geographical", "international operations", "reportable segments",
-        "operating segments", "geographic regions", "our operations",
+        "geographies",
+        "geographic",
+        "geographical",
+        "international operations",
+        "reportable segments",
+        "operating segments",
+        "geographic regions",
+        "our operations",
     ),
     ("restructuring costs", "restructuring charges", "restructuring expenses"),
     ("total debt", "borrowings", "debt obligations"),
@@ -195,6 +214,37 @@ def _query_terms(question: str) -> tuple[tuple[str, ...], tuple[tuple[str, ...],
     return important, concepts
 
 
+def _page_labels(body: str) -> tuple[list[str], list[str], int]:
+    headings: list[str] = []
+    rows: list[str] = []
+    contents_links = 0
+    for raw_line in body.splitlines():
+        line = _SECTION_NUMBER.sub("", raw_line.strip())
+        if _CONTENTS_LINK.search(line):
+            contents_links += 1
+        elif number := _TABLE_VALUE.search(line):
+            rows.append(_phrase(_words(line[: number.start()])))
+        elif 1 < len(line.split()) <= 7:
+            headings.append(_phrase(_words(line)))
+    return headings, rows, contents_links
+
+
+def _cover_concepts(
+    scored: list[tuple[MemoryEntryRecord, float, tuple[float, ...]]], concept_count: int
+) -> list[MemoryEntryRecord]:
+    # Calculations can require evidence from different statements. Reserve one
+    # high-confidence page per concept before filling from the combined ranking.
+    selected = {record.entry.entry_id: record for record, _, _ in scored[:1]}
+    for index in range(concept_count):
+        eligible = (item for item in scored if item[2][index] >= 7.0)
+        best = max(eligible, key=lambda item: item[1] - sum(item[2]) + 2 * item[2][index], default=None)
+        if best is not None:
+            selected.setdefault(best[0].entry.entry_id, best[0])
+    for record, _, _ in scored:
+        selected.setdefault(record.entry.entry_id, record)
+    return list(selected.values())
+
+
 def _rank_pages(
     records: list[MemoryEntryRecord], important: tuple[str, ...], concepts: tuple[tuple[str, ...], ...]
 ) -> list[MemoryEntryRecord]:
@@ -215,33 +265,41 @@ def _rank_pages(
 
     geographic_query = any("geographies" in group for group in concepts)
 
-    def score(page: tuple[MemoryEntryRecord, str, str, list[str], Counter[str]]) -> float:
+    def score(
+        page: tuple[MemoryEntryRecord, str, str, list[str], Counter[str]],
+    ) -> tuple[float, tuple[float, ...]]:
         _, label, body, words, counts = page
         identity_terms = set(map(_term, _words(label)))
         matches = wanted.intersection(identity_terms)
+        body_terms = wanted - matches
         body_score = 0.0
         length_norm = 1.2 * (0.65 + 0.35 * len(words) / average_length)
-        for term in sorted(wanted.intersection(counts) - matches):
+        for term in sorted(body_terms.intersection(counts)):
             weight = weights[term] * (0.2 if _YEAR.fullmatch(term) else 1.0)
             body_score += weight * (2.2 * counts[term] / (counts[term] + length_norm))
         normalized = _phrase(words)
-        headings = [
-            _phrase(_words(_SECTION_NUMBER.sub("", line.strip())))
-            for line in body.splitlines()
-            if 1 < len(line.split()) <= 7 and not any(char.isdigit() for char in _SECTION_NUMBER.sub("", line.strip()))
-        ]
-        concept_score = 0.0
-        for group in phrases:
+        headings, rows, contents_links = _page_labels(body)
+
+        def concept_match(group: tuple[str, ...]) -> float:
             if any(alias in heading for alias in group for heading in headings):
-                concept_score += 9.0
-            elif any(alias in normalized for alias in group):
-                concept_score += 1.2
+                return 9.0
+            if any(alias in row for alias in group for row in rows):
+                return 7.0
+            return 1.2 if any(alias in normalized for alias in group) else 0.0
+
+        concept_scores = tuple(concept_match(group) for group in phrases)
+        concept_score = sum(concept_scores)
         if geographic_query:
             concept_score += 2.0 * sum(_phrase(_words(region)) in normalized for region in _REGION)
         identity_score = sum(0.6 if _YEAR.fullmatch(term) else 4.0 for term in matches)
-        return body_score + concept_score + identity_score
+        contents_penalty = 8.0 if contents_links >= 4 else 0.0
+        return body_score + concept_score + identity_score - contents_penalty, concept_scores
 
-    return [page[0] for page in sorted(pages, key=lambda page: (-score(page), page[0].entry.entry_id))]
+    scored = [(page[0], *score(page)) for page in pages]
+    scored.sort(key=lambda item: (-item[1], item[0].entry.entry_id))
+    if len(phrases) < 2:
+        return [record for record, _, _ in scored]
+    return _cover_concepts(scored, len(phrases))
 
 
 async def search_pdf_pages(
