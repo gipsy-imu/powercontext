@@ -1445,7 +1445,7 @@ class MemoryService:
         identity = _candidate_gate_identity(candidate_index, f"source:{ref.source_type}:{ref.source_id}")
         content = _source_gate_content(source, self._source_resolver)
         if isinstance(content, str) and content.strip():
-            return _bounded_gate_evidence(identity, content)
+            return _bounded_gate_evidence(identity, content, source_refs=(ref.model_dump(mode="json"),))
         return _incomplete_gate_evidence(identity)
 
     @staticmethod
@@ -1717,11 +1717,11 @@ class MemoryService:
         artifacts: Sequence[ArtifactRef],
     ) -> _EntryMaterial:
         normalized_kind = normalize_kind(kind)
-        normalized_text = normalize_text(text)
         canonical_sources = _canonical_source_refs(sources)
         canonical_artifacts = _canonical_artifact_refs(artifacts)
         source_refs = tuple(source.model_dump(mode="json") for source in canonical_sources)
         artifact_refs = tuple(artifact.model_dump(mode="json") for artifact in canonical_artifacts)
+        normalized_text = normalize_text(text, source_refs=source_refs)
         content_bytes = entry_content_bytes(
             kind=normalized_kind,
             text=normalized_text,
@@ -1823,8 +1823,8 @@ def _raise_if_write_held(plan: MemoryWritePlan) -> None:
     raise MemoryWriteRejectedError(code, decision.reason)
 
 
-def _bounded_gate_evidence(identity: str, content: str) -> _GateEvidenceEntry:
-    normalized = normalize_text(content)
+def _bounded_gate_evidence(identity: str, content: str, *, source_refs: Sequence[object] = ()) -> _GateEvidenceEntry:
+    normalized = normalize_text(content, source_refs=source_refs)
     return _GateEvidenceEntry(
         text=f"{identity}\n{normalized[:_GATE_EVIDENCE_TEXT_LIMIT]}",
         complete=len(normalized) <= _GATE_EVIDENCE_TEXT_LIMIT,

@@ -134,6 +134,9 @@ _WORD = re.compile(r"[^\W\d_]+|\d+")
 _SECTION_NUMBER = re.compile(r"^item \d+[a-z]?\s*[.:]\s*", re.IGNORECASE)
 _CONTENTS_LINK = re.compile(r"(?:\.\s*){3,}\d+\s*$")
 _TABLE_VALUE = re.compile(r"\s(?:[$€£]\s*)?\(?-?\d[\d,.]*(?:%|\))?(?=\s|$)")
+_FILING_YEAR = re.compile(r"[_\W]+(?:19|20)\d{2}(?:Q[1-4])?(?:[_\W]|$)", re.IGNORECASE)
+_IDENTITY_WORD = re.compile(r"[^\W_]+")
+_STATEMENT_NUMBER = re.compile(r"\d{1,3}(?:,\d{3})+|\d+\.\d+|\$\s*\d+")
 _REGION = (
     "north america",
     "latin america",
@@ -188,6 +191,56 @@ _CONCEPTS = (
     ("selling general and administrative", "selling and administrative", "sga"),
 )
 
+_STATEMENT_TITLES = {
+    "income": (
+        "statement of income",
+        "statement of operations",
+        "statement of earnings",
+        "income statement",
+        "profit and loss",
+        "earnings statement",
+        "statement of profit",
+        "statement of comprehensive income",
+    ),
+    "balance": ("balance sheet", "statement of financial position", "statement of assets and liabilities"),
+    "cash": ("statement of cash flows", "cash flow statement"),
+    "operations": (
+        "results of operations",
+        "analysis of consolidated sales",
+        "management discussion and analysis",
+        "financial review",
+        "operating results",
+    ),
+}
+
+# Some questions name a financial measure without naming its underlying statement.
+_MEASURE_STATEMENTS = (
+    (("gross margin", "gross profit", "cost of goods sold", "cogs"), ("income", "operations")),
+    (
+        ("operating margin", "operating profit", "operating income", "ebitda", "net income", "earnings per share"),
+        ("income", "operations"),
+    ),
+    (("revenue", "sales growth", "high growth", "growth rate", "financials"), ("income", "operations")),
+    (("inventory turnover", "days payable outstanding", "return on assets"), ("balance", "income")),
+    (
+        (
+            "cash flow",
+            "cashflow",
+            "capital expenditures",
+            "capex",
+            "cash generation",
+            "free cash flow",
+            "cash conversion",
+        ),
+        ("cash",),
+    ),
+    (
+        ("property plant and equipment", "capital intensive", "capital intensity", "ppne", "ppe"),
+        ("balance", "cash", "income"),
+    ),
+    (("quick ratio", "current ratio", "working capital", "liquidity", "total assets", "debt"), ("balance",)),
+)
+
 
 def _words(text: str) -> list[str]:
     text = re.sub(r"(?<=\w)-[ \t]*\n[ \t]*(?=\w)", "", unicodedata.normalize("NFKC", text).casefold())
@@ -212,6 +265,96 @@ def _query_terms(question: str) -> tuple[tuple[str, ...], tuple[tuple[str, ...],
     concepts = tuple(group for group in _CONCEPTS if any(_phrase(_words(alias)) in phrase for alias in group))
     important = tuple(dict.fromkeys(word for word in words if word not in _BOILERPLATE and len(word) > 1))
     return important, concepts
+
+
+def _filing_matches(label: str, query_words: tuple[str, ...]) -> int:
+    name = _FILING_YEAR.split(label, maxsplit=1)[0]
+    company_words = _IDENTITY_WORD.findall(name.casefold())
+    if not company_words:
+        return 0
+    company = "".join(company_words)
+    for start in range(len(query_words)):
+        candidate = ""
+        for word in query_words[start:]:
+            candidate += word
+            if candidate == company:
+                return 2
+            if not company.startswith(candidate):
+                break
+    if len(company_words) > 1:
+        initials = tuple(word[0] for word in company_words)
+        # Recognize initialisms and names joined by a spoken "and".
+        if "".join(initials) in query_words or "n".join(initials) in query_words:
+            return 1
+    return 0
+
+
+def _statement_types(question: str) -> tuple[str, ...]:
+    query = _phrase(_words(question))
+    explicit = [
+        key for key, titles in _STATEMENT_TITLES.items() if any(_phrase(_words(title)) in query for title in titles)
+    ]
+    inferred = [
+        key
+        for measures, keys in _MEASURE_STATEMENTS
+        if any(_phrase(_words(measure)) in query for measure in measures)
+        for key in keys
+    ]
+    return tuple(dict.fromkeys((*explicit, *inferred)))
+
+
+def _statement_score(
+    key: str, title_position: int | None, consolidated: bool, number_count: int, beginning: str
+) -> float:
+    score = 3.0 if title_position is None else 12.0 - 0.7 * title_position
+    if consolidated:
+        score += 3.0
+    if key == "operations":
+        if " consolidated sale " in beginning or " result of operation " in beginning:
+            score += 2.0
+    else:
+        score += min(number_count, 20) * 0.3
+        if number_count < 8:
+            score -= 8.0
+    return score
+
+
+def _prioritize_statements(
+    ranked: list[MemoryEntryRecord], statement_types: tuple[str, ...]
+) -> list[MemoryEntryRecord]:
+    if not statement_types:
+        return ranked
+    titles = {key: tuple(_phrase(_words(title)) for title in names) for key, names in _STATEMENT_TITLES.items()}
+    candidates: dict[str, list[tuple[float, int, MemoryEntryRecord]]] = {key: [] for key in statement_types}
+    for rank, record in enumerate(ranked):
+        body = record.entry.text.partition("\n")[2]
+        beginning = _phrase(_words(body)[:65])
+        matching_types = {key for key, aliases in titles.items() if any(alias in beginning for alias in aliases)}
+        if matching_types.isdisjoint(statement_types):
+            continue
+        first_lines = [line for line in body.splitlines() if line.strip()][:10]
+        lines = [_phrase(_words(line)) for line in first_lines]
+        number_count = len(_STATEMENT_NUMBER.findall(body))
+        consolidated = any(" consolidated " in line for line in lines[:5])
+        for key in statement_types:
+            if key not in matching_types:
+                continue
+            title_position = next(
+                (index for index, line in enumerate(lines) if any(alias in line for alias in titles[key])), None
+            )
+            score = _statement_score(key, title_position, consolidated, number_count, beginning)
+            # A page that names several statements early is often a contents page.
+            score -= 6.0 * sum(titles[other][0] in beginning for other in matching_types - {key})
+            score += 10.0 / (10 + rank)
+            candidates[key].append((score, rank, record))
+    prioritized = {record.entry.entry_id: record for record in ranked[:3]}
+    for pool in candidates.values():
+        pool.sort(key=lambda item: (-item[0], item[1]))
+        for _, _, record in pool[:3]:
+            prioritized.setdefault(record.entry.entry_id, record)
+    for record in ranked:
+        prioritized.setdefault(record.entry.entry_id, record)
+    return list(prioritized.values())
 
 
 def _page_labels(body: str) -> tuple[list[str], list[str], int]:
@@ -323,9 +466,19 @@ async def search_pdf_pages(
         if len(record.entry.sources) == 1 and record.entry.sources[0].source_type == _SOURCE_TYPE
     ]
 
+    query_words = tuple(_IDENTITY_WORD.findall(question.casefold()))
+    labels = {record.entry.entry_id: record.entry.text.partition("\n")[0] for record in records}
+    matches = {label: _filing_matches(label, query_words) for label in set(labels.values())}
+    best_match = max(matches.values(), default=0)
+    primary = [record for record in records if not best_match or matches[labels[record.entry.entry_id]] == best_match]
+    ranked = _prioritize_statements(_rank_pages(primary, important, concepts), _statement_types(question))
+    if best_match and len({record.entry.sources[0].source_id for record in primary}) < limit:
+        remaining = [record for record in records if matches[labels[record.entry.entry_id]] != best_match]
+        ranked.extend(_rank_pages(remaining, important, concepts))
+
     citations: list[MemoryCitation] = []
     seen_pages: set[str] = set()
-    for record in _rank_pages(records, important, concepts):
+    for record in ranked:
         page_id = record.entry.sources[0].source_id
         if page_id not in seen_pages:
             seen_pages.add(page_id)
