@@ -1,0 +1,32 @@
+# 运行时间：2026-11-15  Python 3.9.6  seekdb 1.4.0（127.0.0.1:2881，native macOS arm64 官方包，数据库 yanji）
+
+$ python -m app.cli init
+初始化完成：
+  - 数据库 yanji 就绪
+  - 表 notes 就绪（全文索引 ft_search，IK 分词）
+  - seekdb 版本: 5.7.25-OceanBase seekdb-v1.4.0.0
+
+$ python -m app.cli import
+  daily-log.txt：段落 2，新增 0，已存在 2
+  english-reading-notes.md：段落 2，新增 0，已存在 2
+  report-A-imu-classification.md：段落 4，新增 0，已存在 4
+  report-B-activity-recognition.md：段落 4，新增 0，已存在 4
+导入完成：共 12 段，新增 0 段，重复导入未新增 12 段
+
+$ python -m app.cli import   # 第二次，演示重复导入幂等
+  daily-log.txt：段落 2，新增 0，已存在 2
+  english-reading-notes.md：段落 2，新增 0，已存在 2
+  report-A-imu-classification.md：段落 4，新增 0，已存在 4
+  report-B-activity-recognition.md：段落 4，新增 0，已存在 4
+导入完成：共 12 段，新增 0 段，重复导入未新增 12 段
+
+$ python -m app.cli verify
+PASS [全文检索] 查询 '采样窗口' -> 命中 6 条（同名段落出现在两份报告中，应同时命中且可区分来源）
+PASS [全文检索] 查询 'macro F1' -> 命中 7 条（中英混排检索，命中含 macro F1 的段落）
+PASS [全文检索] 查询 'length alignment' -> 命中 4 条（中文报告的正文含英文术语，也应被英文查询命中）
+PASS [全文检索] 查询 '紫色独角兽观测 zz-qux-unicornium' -> 命中 0 条（所有词均不在库内，界面应显示空态而不是报错）
+PASS [筛选] 查询 '采样窗口' -> 命中 3 条（按报告筛选后只保留该报告的段落）
+PASS [筛选] 查询 '类别不平衡' -> 命中 1 条（按标签筛选只命中带该标签的报告）
+PASS [重复导入] 再次导入全部示例，新增 0、已存在 12 段
+
+验证全部通过

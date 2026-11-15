@@ -1,0 +1,17 @@
+services:
+  seekdb:
+    image: oceanbase/seekdb:1.4.0-100000172026082615
+    ports:
+      - "127.0.0.1:${SEEKDB_PORT:-2881}:2881"
+    environment:
+      ROOT_PASSWORD: "${SEEKDB_PASSWORD:-}"
+    volumes:
+      - seekdb-data:/var/lib/seekdb
+    healthcheck:
+      test: ['CMD-SHELL', 'MYSQL_PWD="$${ROOT_PASSWORD}" mysql -h127.0.0.1 -P2881 -uroot --connect-timeout=2 -e "SELECT 1"']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  seekdb-data:

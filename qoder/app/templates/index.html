@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>研迹 · 科研笔记检索</title>
+<style>
+  :root { --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; --accent:#0f766e; --bad:#b91c1c; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+         color:var(--ink); background:#f8fafc; }
+  header { background:#fff; border-bottom:1px solid var(--line); padding:18px 24px;
+           display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+  header h1 { font-size:22px; margin:0; color:var(--accent); }
+  header .sub { color:var(--muted); font-size:13px; }
+  main { max-width:960px; margin:0 auto; padding:20px 16px 60px; }
+  .banner { border-radius:10px; padding:12px 16px; margin-bottom:16px; font-size:14px; }
+  .banner.ok { background:#ecfdf5; border:1px solid #a7f3d0; }
+  .banner.err { background:#fef2f2; border:1px solid #fecaca; color:var(--bad); }
+  .card { background:#fff; border:1px solid var(--line); border-radius:12px;
+          padding:16px; margin-bottom:16px; }
+  form.search { display:flex; gap:10px; flex-wrap:wrap; }
+  form.search input[type=text] { flex:1 1 260px; padding:10px 12px; font-size:15px;
+    border:1px solid var(--line); border-radius:8px; }
+  select { padding:9px 10px; border:1px solid var(--line); border-radius:8px;
+           background:#fff; font-size:14px; max-width:230px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px;
+           padding:10px 16px; font-size:14px; cursor:pointer; }
+  button.ghost { background:#fff; color:var(--accent); border:1px solid var(--accent); }
+  button:disabled { opacity:.55; cursor:default; }
+  .hint { color:var(--muted); font-size:13px; margin-top:10px; }
+  .result { border-left:3px solid var(--accent); padding:10px 14px; margin:12px 0;
+            background:#fff; border-radius:0 10px 10px 0; border:1px solid var(--line);
+            border-left:3px solid var(--accent); }
+  .result h3 { margin:0 0 4px; font-size:16px; }
+  .result .sec { color:var(--accent); font-size:14px; }
+  .result .snippet { margin:6px 0; font-size:14px; line-height:1.7; color:#374151; }
+  .result mark { background:#fde68a; padding:0 2px; border-radius:3px; }
+  .meta { color:var(--muted); font-size:12px; display:flex; gap:10px;
+          flex-wrap:wrap; align-items:center; }
+  .tag { background:#f1f5f9; border-radius:999px; padding:1px 9px; font-size:12px; }
+  .src { color:var(--accent); cursor:pointer; text-decoration:underline dotted; }
+  .full { margin-top:8px; padding:10px 12px; background:#f8fafc; border:1px dashed var(--line);
+          border-radius:8px; white-space:pre-wrap; font-size:13.5px; line-height:1.8;
+          display:none; }
+  .full.open { display:block; }
+  .empty { text-align:center; color:var(--muted); padding:30px 0; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  footer { text-align:center; color:var(--muted); font-size:12px; padding:20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>研迹</h1>
+  <span class="sub">面向同学和复现实验的科研笔记检索 · seekdb 全文索引</span>
+</header>
+<main>
+  <div id="dbbanner" class="banner {{ 'err' if status.error else 'ok' }}">
+    {% if status.error %}
+      数据库不可用：{{ status.error }}
+      {% if status.database %}（目标：{{ status.host }}:{{ status.port }} / {{ status.database }}）{% endif %}
+      —— 请确认 seekdb 已启动，或配置 SEEKDB_* 环境变量后刷新。
+    {% else %}
+      已连接 seekdb（{{ status.host }}:{{ status.port }} / {{ status.database }}），
+      当前库中有 <b id="count">{{ status.count }}</b> 个笔记段落。
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <button id="demo">▶ 运行内置示例</button>
+      <span class="hint">一键初始化数据库并导入 4 篇时间序列分类示例笔记，随后自动演示检索。</span>
+    </div>
+    <div id="demomsg" class="hint" style="display:none"></div>
+    <div class="row" style="margin-top:14px">
+      <form id="upload" enctype="multipart/form-data" class="row">
+        <input type="file" id="files" name="notes" multiple accept=".md,.txt">
+        <button type="submit" class="ghost">导入所选 Markdown/TXT</button>
+      </form>
+    </div>
+    <div id="uploadmsg" class="hint" style="display:none"></div>
+  </div>
+
+  <div class="card">
+    <form class="search" id="searchform">
+      <input type="text" id="q" placeholder="搜索笔记内容，例如：采样窗口 / macro F1 / length alignment" autofocus>
+      <select id="report"><option value="">全部报告</option></select>
+      <select id="tag"><option value="">全部标签</option></select>
+      <button type="submit">搜索</button>
+    </form>
+    <div class="hint">结果显示段落标题、匹配片段和来源；点来源下方「查看原文」可展开原段落。</div>
+  </div>
+
+  <div id="results"></div>
+</main>
+<footer>研迹 yanji · OceanBase 2026 赛题作品 · 索引与检索均在真实 seekdb 上执行</footer>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => (s || "").replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function jget(url) { const r = await fetch(url); return r.json(); }
+
+function setBanner(payload) {
+  const b = $("#dbbanner");
+  if (payload.error) {
+    b.className = "banner err";
+    b.textContent = "数据库不可用：" + payload.error + " —— 请确认 seekdb 已启动后刷新。";
+  } else {
+    b.className = "banner ok";
+    b.textContent = `已连接 seekdb（${payload.host}:${payload.port} / ${payload.database}），当前库中有 ${payload.count} 个笔记段落。`;
+  }
+}
+
+async function loadFilters() {
+  const data = await jget("/api/filters");
+  if (!data.ok) return;
+  const rep = $("#report"), tg = $("#tag");
+  const keep = [rep.value, tg.value];
+  rep.innerHTML = '<option value="">全部报告</option>' +
+    data.reports.map(r => `<option>${esc(r)}</option>`).join("");
+  tg.innerHTML = '<option value="">全部标签</option>' +
+    data.tags.map(t => `<option>${esc(t)}</option>`).join("");
+  rep.value = keep[0]; tg.value = keep[1];
+  $("#count") && ($("#dbbanner").className = "banner ok");
+}
+
+function renderHits(hits, query) {
+  const box = $("#results");
+  if (!hits.length) {
+    box.innerHTML = `<div class="empty">没有匹配「${esc(query)}」的笔记段落。<br>
+      试试更短的词，或先运行内置示例。</div>`;
+    return;
+  }
+  box.innerHTML = hits.map((h, i) => `
+    <div class="result">
+      <h3>${esc(h.title)} <span class="sec">· ${esc(h.section)}</span></h3>
+      <div class="snippet">${h.snippet}</div>
+      <div class="meta">
+        <span>来源：<b>${esc(h.source)}</b></span>
+        ${(h.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("")}
+        <span>相关度 ${h.score}</span>
+        <span class="src" data-i="${i}">查看原文 ▾</span>
+      </div>
+      <div class="full" id="full-${i}">${esc(h.body)}</div>
+    </div>`).join("");
+  box.querySelectorAll(".src").forEach(el => el.onclick = () =>
+    document.getElementById("full-" + el.dataset.i).classList.toggle("open"));
+}
+
+$("#searchform").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const q = $("#q").value.trim();
+  if (!q) { $("#results").innerHTML = '<div class="empty">请输入搜索词。</div>'; return; }
+  const p = new URLSearchParams({q, report: $("#report").value, tag: $("#tag").value});
+  const data = await jget("/api/search?" + p.toString());
+  if (!data.ok) { setBanner(data); return; }
+  renderHits(data.hits, q);
+});
+
+$("#demo").addEventListener("click", async () => {
+  const btn = $("#demo"); btn.disabled = true;
+  const msg = $("#demomsg"); msg.style.display = "block";
+  msg.textContent = "正在初始化 seekdb 并导入示例笔记…";
+  const r = await fetch("/api/demo", {method: "POST"});
+  const data = await r.json();
+  btn.disabled = false;
+  if (!data.ok) { msg.textContent = "示例运行失败：" + data.error; setBanner({error: data.error}); return; }
+  msg.textContent = `示例已运行：初始化 ${data.steps.join("；")}；导入 ${data.total} 段（新增 ${data.inserted}，重复导入不新增）。`;
+  setBanner(data.status);
+  await loadFilters();
+  $("#q").value = "采样窗口";
+  const res = await jget("/api/search?q=采样窗口");
+  renderHits(res.hits || [], "采样窗口");
+});
+
+$("#upload").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const files = $("#files").files;
+  if (!files.length) return;
+  const fd = new FormData();
+  for (const f of files) fd.append("notes", f);
+  const msg = $("#uploadmsg"); msg.style.display = "block"; msg.textContent = "正在导入…";
+  const r = await fetch("/api/import", {method: "POST", body: fd});
+  const data = await r.json();
+  if (!data.ok) { msg.textContent = "导入失败：" + data.error; return; }
+  msg.textContent = data.files.map(f => `${f.source}：${f.total} 段（新增 ${f.inserted}）`).join("；");
+  setBanner(data.status); await loadFilters();
+});
+
+loadFilters();
+</script>
+</body>
+</html>

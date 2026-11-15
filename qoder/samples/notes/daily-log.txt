@@ -1,0 +1,13 @@
+# 时序分类复现日志
+
+## 环境与数据
+
+数据来自 UCI HAR 与自采 IMU 数据集的合并副本，统一转换为 CSV 后再解析。
+预处理管线为：去重力、低通滤波、采样窗口切分、按个体留出法划分训练/验证/测试集。
+The raw CSVs store per-trial recordings with a variable number of timesteps,
+so every loader must apply length alignment before batching.
+
+## 指标记录
+
+所有实验统一汇报 macro F1，避免类别不平衡时 accuracy 虚高。
+一个常见的坑：验证集上按"类别平均"的 F1 与测试集上按"样本平均"的指标不可直接比较。

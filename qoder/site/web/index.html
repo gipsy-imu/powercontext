@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>研迹 · 科研笔记检索 — OceanBase 2026 赛题作品</title>
+<meta name="description" content="研迹：把散落的时间序列实验笔记变成可全文检索的科研知识库。导入 Markdown，seekdb 建中文全文索引，检索、筛选、溯源一步到位。">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="kicker">OceanBase 2026 · seekdb 全文检索</div>
+    <h1>研迹</h1>
+    <p class="lede">把散落的时间序列实验笔记变成可全文检索的科研知识库——导入 Markdown，seekdb 建中文全文索引，检索、筛选、溯源一步到位。</p>
+    <div class="chips">
+      <span class="chip">seekdb 1.4.0</span>
+      <span class="chip">IK 中文分词</span>
+      <span class="chip">4 篇示例 · 12 段</span>
+      <span class="chip pass">7 项验证全部 PASS</span>
+      <span class="chip">Python + Flask</span>
+    </div>
+  </div>
+</header>
+
+<nav class="toc" aria-label="页面目录">
+  <div class="wrap">
+    <a href="#problem">问题</a>
+    <a href="#features">主要功能</a>
+    <a href="#gallery">运行实录</a>
+    <a href="#seekdb">seekdb 的作用</a>
+    <a href="#repro">复现方式</a>
+    <a href="#verify">验证结果</a>
+    <a href="#entry">体验入口</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+<section id="problem" class="reveal">
+  <h2><span class="no">01</span>问题</h2>
+  <p>做复现实验时，最大的信息黑洞往往不是代码，而是笔记：</p>
+  <div class="grid cols-3">
+    <div class="card"><span class="idx">痛点 A</span><h3>结论散落，搜不动</h3><p>采样窗口选多大、长度怎么对齐、类别不平衡怎么处理——结论散落在几个学期的 Markdown/TXT 文件里，grep 搜不动中文，也带不出上下文。</p></div>
+    <div class="card"><span class="idx">痛点 B</span><h3>同名段落，分不清</h3><p>两份报告里都有「采样窗口」小节，哪个是 4 秒窗口、哪个是 128 时间步？没有来源定位就想不起来。</p></div>
+    <div class="card"><span class="idx">痛点 C</span><h3>中英混排，常漏检</h3><p>笔记里的中英混排术语（macro F1、length alignment）用普通关键词匹配经常漏检。</p></div>
+  </div>
+</section>
+
+<section id="features" class="reveal">
+  <h2><span class="no">02</span>主要功能</h2>
+  <div class="grid cols-2">
+    <div class="card"><span class="idx">F1</span><h3>一键导入示例 / 批量导入自有笔记</h3><p>UTF-8 Markdown 或 TXT，自动保留笔记标题、段落标题、来源文件和原文，按内容去重，重复导入不产生脏数据。</p></div>
+    <div class="card"><span class="idx">F2</span><h3>真实 seekdb 全文检索</h3><p>IK 中文分词 + 英文切词，同一份中英混排正文两个方向都能命中；结果展示段落标题、高亮匹配片段、来源与相关度。</p></div>
+    <div class="card"><span class="idx">F3</span><h3>按报告、按标签筛选</h3><p>下拉即选，与全文条件组合在一条 SQL 内完成。</p></div>
+    <div class="card"><span class="idx">F4</span><h3>点开来源看原段落</h3><p>检索片段可展开原始段落，方便回到实验现场。</p></div>
+    <div class="card"><span class="idx">F5</span><h3>故障可见</h3><p>数据库不可用时界面直接显示连接/初始化错误原文，不白屏、不猜测。</p></div>
+  </div>
+</section>
+
+<section id="gallery" class="reveal">
+  <h2><span class="no">03</span>运行实录</h2>
+  <p class="note">以下截图均为 2026-11-15 在真实 seekdb 1.4.0 实例上的实际运行结果，点击可放大查看。</p>
+  <div class="grid cols-2" style="margin-top:var(--gap)">
+    <figure class="plate tall">
+      <button type="button" data-full="assets/01-demo-search-cn.png" data-cap="图 1 · 中文检索「采样窗口」：一键示例导入后自动演示，高亮片段、来源、标签、相关度，首条原段落已展开">
+        <img src="assets/01-demo-search-cn.png" alt="中文检索采样窗口的结果列表，含高亮片段与展开的原段落" loading="lazy">
+      </button>
+      <figcaption><span class="fig">图 1</span>中文检索「采样窗口」：同名段落双命中，原段落可展开</figcaption>
+    </figure>
+    <figure class="plate">
+      <button type="button" data-full="assets/05-filter-report.png" data-cap="图 2 · 按报告筛选：查询「采样窗口」+ 报告=运动传感器时序分类实验报告 A，仅保留该报告的 3 段">
+        <img src="assets/05-filter-report.png" alt="按报告筛选后仅显示报告 A 的三段结果" loading="lazy">
+      </button>
+      <figcaption><span class="fig">图 2</span>按报告筛选：只保留报告 A 的 3 段</figcaption>
+    </figure>
+    <figure class="plate">
+      <button type="button" data-full="assets/06-filter-tag.png" data-cap="图 3 · 按标签筛选：查询「类别不平衡」+ 标签=复现实验，仅命中报告 B 的 1 段">
+        <img src="assets/06-filter-tag.png" alt="按标签复现实验筛选后仅显示报告 B 的一段结果" loading="lazy">
+      </button>
+      <figcaption><span class="fig">图 3</span>按标签筛选：「复现实验」只命中报告 B</figcaption>
+    </figure>
+    <figure class="plate">
+      <button type="button" data-full="assets/07-original-text.png" data-cap="图 4 · 原文回查：查询 macro F1，点开「查看原文」展开原始段落">
+        <img src="assets/07-original-text.png" alt="macro F1 检索结果，首条展开原始段落" loading="lazy">
+      </button>
+      <figcaption><span class="fig">图 4</span>原文回查：点开来源展开原段落</figcaption>
+    </figure>
+    <figure class="plate">
+      <button type="button" data-full="assets/02-search-en.png" data-cap="图 5 · 英文检索 length alignment：同时命中英文笔记与含该术语的中文段落，共 4 段">
+        <img src="assets/02-search-en.png" alt="英文检索 length alignment 命中四段结果" loading="lazy">
+      </button>
+      <figcaption><span class="fig">图 5</span>英文检索：length alignment 命中中英段落</figcaption>
+    </figure>
+    <figure class="plate">
+      <button type="button" data-full="assets/03-empty-result.png" data-cap="图 6 · 无匹配空态：查询不存在的词返回 0 条，界面给出空态提示而非报错">
+        <img src="assets/03-empty-result.png" alt="无匹配结果时的空态提示" loading="lazy">
+      </button>
+      <figcaption><span class="fig">图 6</span>无匹配：空态提示，不报错</figcaption>
+    </figure>
+    <figure class="plate">
+      <button type="button" data-full="assets/04-db-error-banner.png" data-cap="图 7 · 故障可见：凭据错误时红色横幅原样展示 1045 Access denied">
+        <img src="assets/04-db-error-banner.png" alt="数据库不可用时的红色错误横幅" loading="lazy">
+      </button>
+      <figcaption><span class="fig">图 7</span>数据库不可用：错误原文直接可见</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="seekdb" class="reveal">
+  <h2><span class="no">04</span>seekdb 在这里的作用</h2>
+  <div class="grid cols-3">
+    <div class="card"><h3>库内中文分词</h3><p><code class="inline">notes</code> 表上的全文索引 <code class="inline">FULLTEXT KEY ft_search (title, section, body) WITH PARSER IK</code> 由 seekdb 维护倒排索引，中文分词在库内完成。</p></div>
+    <div class="card"><h3>服务端相关度</h3><p>查询走 <code class="inline">MATCH(title, section, body) AGAINST(?)</code>，相关度评分与命中判定全部发生在 seekdb 服务端，应用层只做片段高亮和展示。</p></div>
+    <div class="card"><h3>可复现部署</h3><p>使用官方 <code class="inline">oceanbase/seekdb</code> 镜像（MySQL 协议，2881 端口），也支持连接已有实例，评测环境可复现。</p></div>
+  </div>
+</section>
+
+<section id="repro" class="reveal">
+  <h2><span class="no">05</span>复现方式</h2>
+<pre>git clone --branch codex/qoder-study-search https://github.com/gipsy-imu/powercontext.git
+cd powercontext/qoder
+<span class="c"># 使用官方镜像启动 seekdb；已有 seekdb 实例时可跳过此命令</span>
+docker compose up -d --wait seekdb
+python3 -m venv .venv &amp;&amp; .venv/bin/pip install -r requirements.txt
+export SEEKDB_HOST=127.0.0.1 SEEKDB_PORT=2881 SEEKDB_USER=root SEEKDB_DATABASE=yanji
+<span class="c"># 连接已有实例时，按实际配置设置连接参数和 SEEKDB_PASSWORD</span>
+.venv/bin/python -m app.cli demo     <span class="c"># 初始化 + 导入示例 + 全部检索断言</span>
+.venv/bin/python -m app.cli serve    <span class="c"># 打开 http://127.0.0.1:8030</span></pre>
+  <p class="note">无 Docker 环境可直接对已有 seekdb 实例执行以上命令。验证覆盖：中文查询「采样窗口」、中英混排「macro F1」、纯英文 length alignment、报告/标签筛选、重复导入幂等、无匹配空态，全部 PASS。</p>
+</section>
+
+<section id="verify" class="reveal">
+  <h2><span class="no">06</span>验证结果</h2>
+  <table class="verify">
+    <thead><tr><th>查询 / 场景</th><th>预期命中</th><th>结果</th></tr></thead>
+    <tbody>
+      <tr><td>采样窗口</td><td>报告 A/采样窗口、报告 B/采样窗口（同名段落双命中）</td><td class="pass">PASS</td></tr>
+      <tr><td>macro F1</td><td>报告 A/类别不平衡、A/实验结果、B/类别不平衡 等 7 段</td><td class="pass">PASS</td></tr>
+      <tr><td>length alignment</td><td>英文笔记/Length alignment、报告 A/长度对齐</td><td class="pass">PASS</td></tr>
+      <tr><td>紫色独角兽观测 zz-qux-unicornium</td><td>0 条，界面空态</td><td class="pass">PASS</td></tr>
+      <tr><td>采样窗口 + 报告=报告 A</td><td>仅报告 A 的 3 段</td><td class="pass">PASS</td></tr>
+      <tr><td>类别不平衡 + 标签=复现实验</td><td>仅报告 B 的 1 段</td><td class="pass">PASS</td></tr>
+      <tr><td>再次导入全部示例</td><td>新增 0、已存在 12</td><td class="pass">PASS</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="entry" class="reveal">
+  <h2><span class="no">07</span>体验入口</h2>
+  <div class="grid cols-2">
+    <div class="card"><h3>项目仓库</h3><p><a href="https://github.com/gipsy-imu/powercontext/tree/codex/qoder-study-search/qoder">研迹源码、运行说明和验证样例</a></p></div>
+    <div class="card"><h3>项目演示</h3><p><a href="#gallery">查看运行实录</a>，或按<a href="#repro">复现步骤</a>在本地导入笔记、搜索和回查原文。</p></div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">研迹 yanji · OceanBase 2026 赛题作品 · 索引与检索均在真实 seekdb 上执行 · 截图与验证记录见项目 qoder/evidence/</div>
+</footer>
+
+<dialog id="lightbox" aria-label="截图放大查看">
+  <img id="lb-img" src="" alt="">
+  <div class="bar"><span id="lb-cap"></span><button type="button" id="lb-close">关闭</button></div>
+</dialog>
+
+<script>
+const lb = document.getElementById('lightbox');
+const lbImg = document.getElementById('lb-img');
+const lbCap = document.getElementById('lb-cap');
+document.querySelectorAll('figure.plate button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    lbImg.src = btn.dataset.full;
+    lbImg.alt = btn.querySelector('img').alt;
+    lbCap.textContent = btn.dataset.cap;
+    lb.showModal();
+  });
+});
+document.getElementById('lb-close').addEventListener('click', () => lb.close());
+lb.addEventListener('click', e => { if (e.target === lb) lb.close(); });
+
+const io = new IntersectionObserver(entries => {
+  entries.forEach(en => { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } });
+}, { threshold: 0.08 });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+</script>
+</body>
+</html>
