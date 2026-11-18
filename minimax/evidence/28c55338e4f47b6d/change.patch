@@ -1,0 +1,9 @@
+--- a/demo/inventory.py
++++ b/demo/inventory.py
+@@ -10,5 +10,5 @@
+ 
+ def restock(items: list[StockItem], threshold: int) -> list[str]:
+     """Return eligible SKUs, ordered by quantity and then by SKU."""
+-    eligible = [item for item in items if not item.discontinued and item.quantity < threshold]
++    eligible = [item for item in items if not item.discontinued and item.quantity <= threshold]
+     return [item.sku for item in sorted(eligible, key=lambda item: (item.quantity, item.sku))]

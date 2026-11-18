@@ -1,0 +1,58 @@
+{
+  "previous_state": {
+    "event": {
+      "baseline_sha256": "82bcbc3d75e613cbe1b205230c1d64461f473ea078d494618c69236ff2b4df0b",
+      "completed": [
+        "retrieve spec, implementation and tests",
+        "reproduce boundary failure"
+      ],
+      "pending": [
+        "request MiniMax edit",
+        "run feature and regression tests after the edit"
+      ],
+      "phase": "prepared",
+      "tests": {
+        "feature": {
+          "command": [
+            "python",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-p",
+            "test_feature.py",
+            "-v"
+          ],
+          "exit_code": 1,
+          "output": "test_includes_an_active_sku_at_the_threshold (test_feature.RestockBoundaryTest.test_includes_an_active_sku_at_the_threshold) ... FAIL\n\n======================================================================\nFAIL: test_includes_an_active_sku_at_the_threshold (test_feature.RestockBoundaryTest.test_includes_an_active_sku_at_the_threshold)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"demo/tests/test_feature.py\", line 9, in test_includes_an_active_sku_at_the_threshold\n    self.assertEqual(restock(items, threshold=5), [\"below\", \"at\"])\nAssertionError: Lists differ: ['below'] != ['below', 'at']\n\nSecond list contains 1 additional elements.\nFirst extra element 1:\n'at'\n\n- ['below']\n+ ['below', 'at']\n?         ++++++\n\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nFAILED (failures=1)\n"
+        },
+        "regression": {
+          "command": [
+            "python",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-p",
+            "test_regression.py",
+            "-v"
+          ],
+          "exit_code": 0,
+          "output": "test_restock_of_empty_inventory (test_regression.RestockCompatibilityTest.test_restock_of_empty_inventory) ... ok\ntest_restock_preserves_filter_and_order (test_regression.RestockCompatibilityTest.test_restock_preserves_filter_and_order) ... ok\n\n----------------------------------------------------------------------\nRan 2 tests in 0.000s\n\nOK\n"
+        }
+      }
+    },
+    "scope_id": "scp_2fzrw5h6e9s00jvytykvag3rc1",
+    "source_id": "SDD-001-f38e64bebcb5da58267cf396dc4b0145d75e746366026bb3af187b69f188369c"
+  },
+  "request": "restock threshold",
+  "sources": {
+    "demo/inventory.py": "from dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass StockItem:\n    sku: str\n    quantity: int\n    discontinued: bool = False\n\n\ndef restock(items: list[StockItem], threshold: int) -> list[str]:\n    \"\"\"Return eligible SKUs, ordered by quantity and then by SKU.\"\"\"\n    eligible = [item for item in items if not item.discontinued and item.quantity < threshold]\n    return [item.sku for item in sorted(eligible, key=lambda item: (item.quantity, item.sku))]\n",
+    "demo/specs/restock.md": "# Reorder threshold\n\n`inventory.restock` returns the SKU of each active item whose quantity is **at or below** the threshold. The threshold applies to each item independently. A discontinued item is never eligible.\n\nKeep the established order of increasing quantity, then alphabetical SKU. Items above the threshold stay excluded. An empty inventory returns an empty list.\n\nFor task SDD-001, bring the implementation in line with the inclusive boundary. Preserve the public signature and update the implementation only.\n",
+    "demo/tests/test_feature.py": "import unittest\n\nfrom inventory import StockItem, restock\n\n\nclass RestockBoundaryTest(unittest.TestCase):\n    def test_includes_an_active_sku_at_the_threshold(self):\n        items = [StockItem(\"over\", 6), StockItem(\"at\", 5), StockItem(\"below\", 2)]\n        self.assertEqual(restock(items, threshold=5), [\"below\", \"at\"])\n",
+    "demo/tests/test_regression.py": "import unittest\n\nfrom inventory import StockItem, restock\n\n\nclass RestockCompatibilityTest(unittest.TestCase):\n    def test_restock_preserves_filter_and_order(self):\n        items = [\n            StockItem(\"z\", 1),\n            StockItem(\"a\", 1),\n            StockItem(\"low\", 0),\n            StockItem(\"high\", 10),\n            StockItem(\"closed\", 0, discontinued=True),\n            StockItem(\"closed-at-threshold\", 5, discontinued=True),\n        ]\n        self.assertEqual(restock(items, threshold=5), [\"low\", \"a\", \"z\"])\n\n    def test_restock_of_empty_inventory(self):\n        self.assertEqual(restock([], threshold=5), [])\n"
+  },
+  "task": "SDD-001"
+}
